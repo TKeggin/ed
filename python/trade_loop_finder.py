@@ -8,6 +8,7 @@ from functools import lru_cache
 from io import StringIO
 import argparse
 from numba import jit
+import math
 
 # Helper Functions
 @jit(nopython=True)
@@ -66,12 +67,20 @@ def get_trade_routes(arb_ops, systems, system_coords, n_commodities=10):
     trade_routes['distance'] = trade_routes.apply(lambda x : dist(x.buy_coords, x.sell_coords), axis=1)
     return trade_routes.drop(columns={'buy_pad','sell_pad'})
 
-def get_routes(trade_routes, cargo_space, current_system, ids=False):
+def get_routes(trade_routes, cargo_space, current_system, ids=False, no_return=False, jump_range=0):
     """ Calculate the best profit per distance travelled for buying & selling goods """
     start_coords = current_system[['x','y','z']].apply(lambda x : tuple(x), axis=1).iloc[0]
     trade_routes['start_leg'] = trade_routes.buy_coords.apply(lambda x : dist(x,start_coords))
     trade_routes['end_leg'] = trade_routes.sell_coords.apply(lambda x : dist(x,start_coords))
-    trade_routes['loop_distance'] = trade_routes[['distance','start_leg','end_leg']].apply(sum, axis=1)
+
+    if jump_range!=0:
+        # Turn these into ~hops rather than distances
+        trade_routes[['distance','start_leg','end_leg']] = np.ceil(trade_routes[['distance','start_leg','end_leg']] / jump_range)
+
+    if no_return:
+        trade_routes['loop_distance'] = trade_routes[['distance','start_leg']].apply(sum, axis=1)
+    else:
+        trade_routes['loop_distance'] = trade_routes[['distance','start_leg','end_leg']].apply(sum, axis=1)
     trade_routes['n_units'] = trade_routes['n_avaliable_units'].apply(lambda x : min(x, cargo_space))
     trade_routes['total_profit'] = trade_routes['n_units'] * trade_routes['unit_profit']
     trade_routes['profit_ratio'] = trade_routes['total_profit'] / trade_routes['loop_distance']
@@ -82,11 +91,13 @@ def get_routes(trade_routes, cargo_space, current_system, ids=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-system", "--start_system", help="Your current system", default='LP 128-9', type=str)
-    parser.add_argument("-cargo", "--cargo_space", help="Your avaliable cargo space", default=40, type=int)
-    parser.add_argument("-nc", "--n_commodities", help="Number of commodities to check", default=15, type=int)
-    parser.add_argument("-nr", "--n_results", help="Number of results to return", default=20, type=int)
+    parser.add_argument("-s", "--start_system", help="Your current system", default='LP 128-9', type=str)
+    parser.add_argument("-c", "--cargo_space", help="Your avaliable cargo space", default=40, type=int)
+    parser.add_argument("-nr", "--no_return", help="Do you want to return home?", action='store_true')
+    parser.add_argument("-jr", "--jump_range", help="Your ships loaded jump range", default=0, type=float)
     parser.add_argument("-p", "--pad_size", help="Smallest pad you can land at", default='S', type=str)
+    parser.add_argument("--n_results", help="Number of results to return", default=20, type=int)
+    parser.add_argument("--n_commodities", help="Number of commodities to check", default=15, type=int)
     args = parser.parse_args()
     
     systems, system_coords = get_systems()
@@ -100,7 +111,7 @@ if __name__ == '__main__':
     trade_routes = get_trade_routes(arb_ops, systems, system_coords, n_commodities=args.n_commodities)
 
 
-    routes = get_routes(trade_routes, args.cargo_space, current_system, ids=False)
+    routes = get_routes(trade_routes, args.cargo_space, current_system, ids=False, no_return=args.no_return, jump_range=args.jump_range)
     routes = routes[routes.pad_size<=args.pad_size]
     routes['total_profit'] = routes['total_profit'].apply(lambda x: "{:,}".format(x))
     print(routes.head(args.n_results).to_markdown(showindex=False))
