@@ -40,6 +40,8 @@ vignettes/*.pdf
 
 # the data folder
 data/*
+*.log
+*.pkl
 
 # Python things
 *.ipynb

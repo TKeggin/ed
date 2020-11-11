@@ -1,9 +1,0 @@
-README.md
-setup.py
-ed/__init__.py
-ed/route_finder.py
-ed/trade_loop_finder.py
-ed.egg-info/PKG-INFO
-ed.egg-info/SOURCES.txt
-ed.egg-info/dependency_links.txt
-ed.egg-info/top_level.txt

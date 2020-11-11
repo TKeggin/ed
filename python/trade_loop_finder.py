@@ -1,3 +1,4 @@
+from pathlib import Path
 import requests as req
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -9,6 +10,7 @@ from io import StringIO
 import argparse
 from numba import jit
 import math
+import sqlite3
 
 # Helper Functions
 @jit(nopython=True)
@@ -31,7 +33,6 @@ def get_systems():
     return systems, system_coords
 
 # Main Functions
-
 def get_arb_ops():
     """ Find the most arbitragable commodites on EDDB """
     r = req.get("https://eddb.io/commodity")
@@ -41,7 +42,7 @@ def get_arb_ops():
     arb_ops['link'] = arb_ops.index.map(pd.Series({x.text:x['href'] for x in table.find_all('a')}))
     return arb_ops
 
-def get_trade_routes(arb_ops, systems, system_coords, n_commodities=10):
+def get_trade_routes(arb_ops, system_coords, n_commodities=10):
     """ Find the best stations to buy & sell the most arbitragable commodities """
     trade_routes = []
     for (commodity_name, commodity_details) in tqdm(arb_ops.head(n_commodities).iterrows(), total=n_commodities):
@@ -53,6 +54,8 @@ def get_trade_routes(arb_ops, systems, system_coords, n_commodities=10):
         buy_stations, sell_stations = [pd.read_html(str(x))[0].rename(columns={'Unnamed: 6':'latency'})  for x in [buy_table, sell_table]]
         buy_stations['station_id'] = buy_stations['Station'].map(pd.Series({x.text:x['href'] for x in buy_table.find_all('a')})).str.split('/').str[-1]
         sell_stations['station_id'] = sell_stations['Station'].map(pd.Series({x.text:x['href'] for x in sell_table.find_all('a')})).str.split('/').str[-1]
+        buy_stations['System'] = buy_stations['System'].str.upper()
+        sell_stations['System'] = sell_stations['System'].str.upper()
         buy_stations['coords'] = buy_stations.System.map(system_coords)
         sell_stations['coords'] = sell_stations.System.map(system_coords)
         buy_stations = buy_stations[['Station','Pad','station_id','System','Buy','Supply','coords']].rename(columns=lambda x : 'buy_'+x.lower()).rename(columns={'buy_buy':'buy_price'})
@@ -60,7 +63,7 @@ def get_trade_routes(arb_ops, systems, system_coords, n_commodities=10):
         commodity_trade_routes = pd.concat([pd.concat([x[0][1], x[1][1]]) for x in itertools.product(buy_stations.iterrows(), sell_stations.iterrows())], axis=1).T.reset_index(drop=True)
         commodity_trade_routes['commodity'] = commodity_name
         trade_routes.append(commodity_trade_routes)
-    trade_routes = pd.concat(trade_routes)
+    trade_routes = pd.concat(trade_routes).dropna()
     trade_routes['pad_size'] = trade_routes[['buy_pad','sell_pad']].apply(set, axis=1).apply(max)
     trade_routes['unit_profit'] = trade_routes.sell_price - trade_routes.buy_price
     trade_routes['n_avaliable_units'] = trade_routes.apply(lambda x : min(x.buy_supply, x.sell_demand), axis=1)
@@ -69,7 +72,7 @@ def get_trade_routes(arb_ops, systems, system_coords, n_commodities=10):
 
 def get_routes(trade_routes, cargo_space, current_system, ids=False, no_return=False, jump_range=0):
     """ Calculate the best profit per distance travelled for buying & selling goods """
-    start_coords = current_system[['x','y','z']].apply(lambda x : tuple(x), axis=1).iloc[0]
+    start_coords = current_system.iloc[0]
     trade_routes['start_leg'] = trade_routes.buy_coords.apply(lambda x : dist(x,start_coords))
     trade_routes['end_leg'] = trade_routes.sell_coords.apply(lambda x : dist(x,start_coords))
 
@@ -100,16 +103,17 @@ if __name__ == '__main__':
     parser.add_argument("--n_commodities", help="Number of commodities to check", default=15, type=int)
     args = parser.parse_args()
     
-    systems, system_coords = get_systems()
+    systems_pkl_path = Path(__file__).absolute().parent.parent / "data/systems.pkl"
+    systems = pd.read_pickle(systems_pkl_path)
+    systems.index = systems.index.str.upper()
 
-    current_system = systems[systems.name.str.lower()==args.start_system.lower()].copy()
+    current_system = systems[systems.index.str.lower()==args.start_system.lower()].copy()
     if len(current_system) != 1:
         print(current_system)
         raise ValueError("Could not find System")
 
     arb_ops = get_arb_ops()
-    trade_routes = get_trade_routes(arb_ops, systems, system_coords, n_commodities=args.n_commodities)
-
+    trade_routes = get_trade_routes(arb_ops, systems, n_commodities=args.n_commodities)
 
     routes = get_routes(trade_routes, args.cargo_space, current_system, ids=False, no_return=args.no_return, jump_range=args.jump_range)
     routes = routes[routes.pad_size<=args.pad_size]
