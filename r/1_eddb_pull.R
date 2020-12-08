@@ -25,4 +25,4 @@ data <- list(date.time   = as.numeric(Sys.time()),
              listings    = listings)
 
 # write the data to disk
-saveRDS(data, "../data/raw/database.RDS")
+saveRDS(data, paste0("../data/raw/",Sys.Date(),".rds"))
