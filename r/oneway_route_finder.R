@@ -5,22 +5,21 @@
 
 library(tidyverse)
 library(reshape2)
-library(TSP)
 
 # load system data
 systems <- read_delim("C:/Users/thoma/OneDrive/Documents/ed/data/systems.csv", delim=",")
 
 
 # specify target systems
-way_systems <- c("HIP 33287",
-                 "LP 131-66",
-                 "Zeaex")
+way_systems <- c("Gliese 3258",
+                 "Pleiades Sector IH-C2-I6")
 # present system
 start_system <- "LHS 28"
 waypoints <- length(c(way_systems,start_system))
 
 # filter for target system data
 systems_target <- filter(systems, name %in% c(way_systems,start_system))
+systems_target <- filter(systems, grepl(paste(c(way_systems,start_system),collapse="|"),name))
 
 # create a distance matrix
 sys_dist <- as.matrix(dist(systems_target[,c("x","y","z")], method = "euclidean"))
