@@ -1,19 +1,13 @@
 # set session
 
 library(httr)
-library(jsonlite)
+library(readr)
 
 # get data
-systems_raw     <- GET("https://eddb.io/archive/v6/systems_populated.json")
-stations_raw    <- GET("https://eddb.io/archive/v6/stations.json")
-commodities_raw <- GET("https://eddb.io/archive/v6/commodities.json")
-factions_raw    <- GET("https://eddb.io/archive/v6/factions.json")
-
-# convert data to data frames
-systems     <- fromJSON(rawToChar(systems_raw$content))
-stations    <- fromJSON(rawToChar(stations_raw$content))
-commodities <- fromJSON(rawToChar(commodities_raw$content))
-factions    <- fromJSON(rawToChar(factions_raw$content))
+systems     <- GET("https://eddb.io/archive/v6/systems_populated.json")
+stations    <- GET("https://eddb.io/archive/v6/stations.json")
+commodities <- GET("https://eddb.io/archive/v6/commodities.json")
+factions    <- GET("https://eddb.io/archive/v6/factions.json")
 listings    <- read_csv("https://eddb.io/archive/v6/listings.csv")
 
 # compile into a time stamped list
