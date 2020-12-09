@@ -1,10 +1,13 @@
 #!/bin/bash
 
+# move to data directory
+cd ../data/raw/
+
 # create a directory with the current date
-mkdir ../data/raw/"$(date +"%d-%m-%Y")"
+mkdir "$(date +"%d-%m-%Y")"
 
 # switch to the daily directory
-cd ../data/raw/"$(date +"%d-%m-%Y")"
+cd "$(date +"%d-%m-%Y")"
 
 # pull the eddb.io data
 wget https://eddb.io/archive/v6/systems_populated.json
